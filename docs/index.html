@@ -1,0 +1,34 @@
+<!DOCTYPE HTML>
+<html lang="en">
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <title>Known Problems</title>
+</head>
+<body>
+<h1>Known Problems</h1>
+<br>
+<h2>UBJsonReader on GWT doesn't deserialize many long values correctly.</h2>
+<p>
+The check should look like this, with the same values for a pair of `long` states when entered in, when serialized into JSON or UBJSON.
+It is correct on LWJGL3:
+</p>
+<img src="UBJsonCheck_LWJGL3_1_13_1.png" width="960" height="660" alt="LWJGL3 is correct" />
+<p>
+However, on GWT it is not correct all once deserialized from UBJSON!
+</p>
+<img src="UBJsonCheck_GWT_1_13_1.png" width="840" height="359" alt="GWT is incorrect" />
+<p>
+The reason for this is a mistake in DataInputStream's GWT implementation, which read an `int` and then tries to make it the low 32 bits of a `long`.
+It does so incorrectly, using <pre>long b = readInt() & 0x0ffffffff;</pre>
+(<a href="https://github.com/libgdx/libgdx/blob/85588b826a47c09a33e0bc7d9d80ce95886ba64e/backends/gdx-backends-gwt/src/com/badlogic/gdx/backends/gwt/emu/java/io/DataInputStream.java#L88-L92">source here</a>).
+This appears to assume the 32-bit to 64-bit promotion rules of C or C++, but Java does not do this, and current versions of IDEA and Android Studio will warn about the above code!
+</p>
+<img src="UBJsonCheck_warning.png" width="732" height="137" alt="IDEA shows a warning" />
+<p>
+That code will read in a 32-bit signed int, mask it with an int (!) that is equivalent to -1 (this does nothing, and it remains an int), then store that in a long.
+Storing an int in a long extends the sign bit from the most significant bit of an int to fill every bit in the upper half of a long, making a read-in int such as <pre>0x87654321</pre>
+become the long <pre>0xFFFFFFFF87654321L</pre>. This is combined with an earlier int for the high bits using bitwise OR, but if the upper half is 0xFFFFFFFF, then the OR wipes out the earlier high bits.
+The correct way is to use <pre>long b = readInt() & 0xFFFFFFFFL;</pre> instead.
+</p>
+</body>
+</html>
