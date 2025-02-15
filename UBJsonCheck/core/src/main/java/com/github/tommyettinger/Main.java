@@ -8,6 +8,11 @@ import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.math.RandomXS128;
 import com.badlogic.gdx.utils.*;
+import com.badlogic.gdx.utils.viewport.ScreenViewport;
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 
 /** {@link com.badlogic.gdx.ApplicationListener} implementation shared by all platforms. */
 public class Main extends ApplicationAdapter {
@@ -16,8 +21,9 @@ public class Main extends ApplicationAdapter {
     private BitmapFont font;
     private Json json;
     private RandomXS128 random;
-    private String serialized  ;
-    private String deserialized;
+    private String serialized  , ubSerialized   = "";
+    private String deserialized, ubDeserialized = "";
+    private ScreenViewport vp;
 
     public static void registerRandomXS128( Json json) {
         if(json.getSerializer(RandomXS128.class) != null) return;
@@ -42,6 +48,7 @@ public class Main extends ApplicationAdapter {
 
     @Override
     public void create() {
+        vp = new ScreenViewport();
         batch = new SpriteBatch();
         image = new Texture("libgdx.png");
         font = new BitmapFont();
@@ -50,19 +57,49 @@ public class Main extends ApplicationAdapter {
         registerRandomXS128(json);
         serialized   = json.prettyPrint(json.toJson(random, RandomXS128.class));
         deserialized = json.prettyPrint(json.fromJson(RandomXS128.class, serialized));
+
+        ByteArrayOutputStream baos = new ByteArrayOutputStream(8192);
+        UBJsonWriter ubWriter = new UBJsonWriter(baos);
+        byte[] ba = new byte[0];
+        try {
+            ubWriter.value(new JsonReader().parse(serialized));
+            ba = baos.toByteArray();
+            ubDeserialized = "UBJson deserialized length="+ba.length;
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
+        UBJsonReader ubReader = new UBJsonReader();
+        ubReader.oldFormat = false;
+        ByteArrayInputStream bais = new ByteArrayInputStream(ba);
+        JsonValue jv = ubReader.parse(bais);
+        ubSerialized = json.prettyPrint(jv.prettyPrint(JsonWriter.OutputType.json, 120));
+
     }
 
     @Override
     public void render() {
         ScreenUtils.clear(0.15f, 0.15f, 0.2f, 1f);
+        vp.apply(true);
+        batch.setProjectionMatrix(vp.getCamera().combined);
         batch.begin();
-        batch.draw(image, 140, 440);
+        batch.draw(image, 100, 440);
         font.draw(batch, "OK, let's see if this works..." +
             "\nShould have states " + 0x1234567887654321L + ", " + 0x00000000FFFFFFFFL +
             "\nSerialized:   " + serialized +
             "\nDeserialized: " + deserialized,
-            140, 400, 500, Align.topLeft, true);
+            100, 400, 400, Align.topLeft, true);
+        font.draw(batch, "OK, let's see if this works..." +
+            "\nShould have states " + 0x1234567887654321L + ", " + 0x00000000FFFFFFFFL +
+            "\nUB Serialized:   " + ubSerialized +
+            "\nUB Deserialized: " + ubDeserialized,
+            500, 400, 400, Align.topLeft, true);
         batch.end();
+    }
+
+    @Override
+    public void resize(int width, int height) {
+        vp.update(width, height);
     }
 
     @Override
