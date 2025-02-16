@@ -1,15 +1,15 @@
 package com.github.tommyettinger;
 
 import com.badlogic.gdx.ApplicationAdapter;
-import com.badlogic.gdx.Gdx;
-import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.math.RandomXS128;
 import com.badlogic.gdx.utils.*;
+import com.badlogic.gdx.utils.compression.Lzma;
 import com.badlogic.gdx.utils.viewport.ScreenViewport;
 
+import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -21,8 +21,8 @@ public class Main extends ApplicationAdapter {
     private BitmapFont font;
     private Json json;
     private RandomXS128 random;
-    private String serialized  , ubSerialized   = "";
-    private String deserialized, ubDeserialized = "";
+    private String serialized  , ubSerialized   = "", ubLzmaSerialized   = "";
+    private String deserialized, ubDeserialized = "", ubLzmaDeserialized = "";
     private ScreenViewport vp;
 
     public static void registerRandomXS128( Json json) {
@@ -64,17 +64,35 @@ public class Main extends ApplicationAdapter {
         try {
             ubWriter.value(new JsonReader().parse(serialized));
             ba = baos.toByteArray();
-            ubDeserialized = "UBJson deserialized length="+ba.length;
+            ubSerialized = "UBJson serialized length="+ba.length;
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
 
         UBJsonReader ubReader = new UBJsonReader();
         ubReader.oldFormat = false;
-        ByteArrayInputStream bais = new ByteArrayInputStream(ba);
+        BufferedInputStream bais = new BufferedInputStream(new ByteArrayInputStream(ba));
         JsonValue jv = ubReader.parse(bais);
-        ubSerialized = json.prettyPrint(jv.prettyPrint(JsonWriter.OutputType.json, 120));
+        ubDeserialized = json.prettyPrint(jv.prettyPrint(JsonWriter.OutputType.json, 120));
 
+        try {
+            baos.reset();
+            bais = new BufferedInputStream(new ByteArrayInputStream(ba));
+            Lzma.compress(bais, baos);
+            byte[] ba2 = baos.toByteArray();
+            ubLzmaSerialized = "UBJson+LZMA serialized length="+ba2.length;
+            bais = new BufferedInputStream(new ByteArrayInputStream(ba2));
+            baos.reset();
+            Lzma.decompress(bais, baos);
+            ba2 = baos.toByteArray();
+            bais = new BufferedInputStream(new ByteArrayInputStream(ba2));
+            jv = ubReader.parse(bais);
+            ubLzmaDeserialized = json.prettyPrint(jv.prettyPrint(JsonWriter.OutputType.json, 120));
+
+
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Override
@@ -83,17 +101,22 @@ public class Main extends ApplicationAdapter {
         vp.apply(true);
         batch.setProjectionMatrix(vp.getCamera().combined);
         batch.begin();
-        batch.draw(image, 100, 440);
-        font.draw(batch, "OK, let's see if this works..." +
+//        batch.draw(image, 100, 440);
+        font.draw(batch, "OK, let's see if Json works..." +
             "\nShould have states " + 0x1234567887654321L + ", " + 0x00000000FFFFFFFFL +
             "\nSerialized:   " + serialized +
             "\nDeserialized: " + deserialized,
-            100, 400, 400, Align.topLeft, true);
-        font.draw(batch, "OK, let's see if this works..." +
+            50, 600, 300, Align.topLeft, true);
+        font.draw(batch, "OK, let's see if UBJson works..." +
             "\nShould have states " + 0x1234567887654321L + ", " + 0x00000000FFFFFFFFL +
             "\nUB Serialized:   " + ubSerialized +
             "\nUB Deserialized: " + ubDeserialized,
-            500, 400, 400, Align.topLeft, true);
+            375, 600, 300, Align.topLeft, true);
+        font.draw(batch, "OK, let's see if UBJson+LZMA works..." +
+            "\nShould have states " + 0x1234567887654321L + ", " + 0x00000000FFFFFFFFL +
+            "\nUB+LZMA Serialized:   " + ubLzmaSerialized +
+            "\nUB+LZMA Deserialized: " + ubLzmaDeserialized,
+            700, 600, 300, Align.topLeft, true);
         batch.end();
     }
 
