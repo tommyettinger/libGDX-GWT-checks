@@ -21,8 +21,8 @@ public class Main extends ApplicationAdapter {
     private BitmapFont font;
     private Json json;
     private RandomXS128 random;
-    private String serialized  , ubSerialized   = "", ubLzmaSerialized   = "";
-    private String deserialized, ubDeserialized = "", ubLzmaDeserialized = "";
+    private String serialized  , ubSerialized   = "", ubLzmaSerialized   = "", lzmaSerialized   = "";
+    private String deserialized, ubDeserialized = "", ubLzmaDeserialized = "", lzmaDeserialized = "";
     private ScreenViewport vp;
 
     public static void registerRandomXS128( Json json) {
@@ -58,29 +58,24 @@ public class Main extends ApplicationAdapter {
         serialized   = json.prettyPrint(json.toJson(random, RandomXS128.class));
         deserialized = json.prettyPrint(json.fromJson(RandomXS128.class, serialized));
 
-        ByteArrayOutputStream baos = new ByteArrayOutputStream(8192);
-        UBJsonWriter ubWriter = new UBJsonWriter(baos);
-        byte[] ba = new byte[0];
         try {
+            ByteArrayOutputStream baos = new ByteArrayOutputStream(8192);
+            UBJsonWriter ubWriter = new UBJsonWriter(baos);
             ubWriter.value(new JsonReader().parse(serialized));
-            ba = baos.toByteArray();
-            ubSerialized = "UBJson serialized length="+ba.length;
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+            byte[] ba = baos.toByteArray();
+            ubSerialized = "UBJson serialized length=" + ba.length;
 
-        UBJsonReader ubReader = new UBJsonReader();
-        ubReader.oldFormat = false;
-        BufferedInputStream bais = new BufferedInputStream(new ByteArrayInputStream(ba));
-        JsonValue jv = ubReader.parse(bais);
-        ubDeserialized = json.prettyPrint(jv.prettyPrint(JsonWriter.OutputType.json, 120));
+            UBJsonReader ubReader = new UBJsonReader();
+            ubReader.oldFormat = false;
+            BufferedInputStream bais = new BufferedInputStream(new ByteArrayInputStream(ba));
+            JsonValue jv = ubReader.parse(bais);
+            ubDeserialized = json.prettyPrint(jv.prettyPrint(JsonWriter.OutputType.json, 120));
 
-        try {
             baos.reset();
             bais = new BufferedInputStream(new ByteArrayInputStream(ba));
             Lzma.compress(bais, baos);
             byte[] ba2 = baos.toByteArray();
-            ubLzmaSerialized = "UBJson+LZMA serialized length="+ba2.length;
+            ubLzmaSerialized = "UBJson+LZMA serialized length=" + ba2.length;
             bais = new BufferedInputStream(new ByteArrayInputStream(ba2));
             baos.reset();
             Lzma.decompress(bais, baos);
@@ -89,7 +84,17 @@ public class Main extends ApplicationAdapter {
             jv = ubReader.parse(bais);
             ubLzmaDeserialized = json.prettyPrint(jv.prettyPrint(JsonWriter.OutputType.json, 120));
 
-
+            baos.reset();
+            bais = new BufferedInputStream(new ByteArrayInputStream(serialized.getBytes("UTF-8")));
+            Lzma.compress(bais, baos);
+            ba2 = baos.toByteArray();
+            lzmaSerialized = "Json+LZMA serialized length=" + ba2.length;
+            bais = new BufferedInputStream(new ByteArrayInputStream(ba2));
+            baos.reset();
+            Lzma.decompress(bais, baos);
+            JsonReader jr = new JsonReader();
+            jv = jr.parse(baos.toString("UTF-8"));
+            lzmaDeserialized = json.prettyPrint(jv.prettyPrint(JsonWriter.OutputType.json, 120));
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -107,10 +112,15 @@ public class Main extends ApplicationAdapter {
             "\nSerialized:   " + serialized +
             "\nDeserialized: " + deserialized,
             50, 600, 300, Align.topLeft, true);
-        font.draw(batch, "OK, let's see if UBJson works..." +
+//        font.draw(batch, "OK, let's see if UBJson works..." +
+//            "\nShould have states " + 0x1234567887654321L + ", " + 0x00000000FFFFFFFFL +
+//            "\nUB Serialized:   " + ubSerialized +
+//            "\nUB Deserialized: " + ubDeserialized,
+//            375, 600, 300, Align.topLeft, true);
+        font.draw(batch, "OK, let's see if Json+LZMA works..." +
             "\nShould have states " + 0x1234567887654321L + ", " + 0x00000000FFFFFFFFL +
-            "\nUB Serialized:   " + ubSerialized +
-            "\nUB Deserialized: " + ubDeserialized,
+            "\nLZMA Serialized:   " + lzmaSerialized +
+            "\nLZMA Deserialized: " + lzmaDeserialized,
             375, 600, 300, Align.topLeft, true);
         font.draw(batch, "OK, let's see if UBJson+LZMA works..." +
             "\nShould have states " + 0x1234567887654321L + ", " + 0x00000000FFFFFFFFL +
